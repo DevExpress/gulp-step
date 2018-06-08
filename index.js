@@ -1,10 +1,14 @@
 const NO_STEP_NAME_ERROR_MSG = 'No step name was specified in a gulp.step call! A step name is required.';
 
+const NOT_FOUND_INDEX = -1;
+
 
 const GulpStepPlugin = {
     gulp:          null,
     gulpFunctions: {},
     steps:         {},
+
+    stepsAsTasks: false,
 
     _addStepsToArgs (args) {
         return args.map(arg => {
@@ -20,9 +24,12 @@ const GulpStepPlugin = {
         });
     },
 
-    install (gulp) {
+    install (gulp, opts) {
         if (!gulp)
             gulp = require('gulp');
+
+        if (!opts)
+            opts = {};
 
         GulpStepPlugin.gulp = gulp;
 
@@ -31,9 +38,17 @@ const GulpStepPlugin = {
             parallel: gulp.parallel
         };
 
-        gulp.step     = GulpStepPlugin.step;
-        gulp.series   = GulpStepPlugin.series;
-        gulp.parallel = GulpStepPlugin.parallel;
+        GulpStepPlugin.stepsAsTasks = 'stepsAsTasks' in opts
+            ? opts.stepsAsTasks
+            : process.argv.indexOf('--steps-as-tasks') > NOT_FOUND_INDEX;
+
+        gulp.step = GulpStepPlugin.step;
+
+        if (!GulpStepPlugin.stepsAsTasks) {
+            gulp.series   = GulpStepPlugin.series;
+            gulp.parallel = GulpStepPlugin.parallel;
+        }
+
     },
 
     uninstall () {
@@ -49,9 +64,16 @@ const GulpStepPlugin = {
 
         this.gulp          = null;
         this.gulpFunctions = {};
+
+        GulpStepPlugin.stepsAsTasks = false;
     },
 
-    step (name, fn) {
+    step (...args) {
+        if (GulpStepPlugin.stepsAsTasks)
+            return GulpStepPlugin.gulp.task(...args);
+
+        const [name, fn] = args;
+
         if (!name)
             throw new Error(NO_STEP_NAME_ERROR_MSG);
 
